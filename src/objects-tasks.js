@@ -34,19 +34,13 @@ function shallowCopy(obj) {
  *    mergeObjects([]) => {}
  */
 function mergeObjects(objects) {
-  const mergedObject = objects.reduce((merged, current) => {
-    const curMerged = merged;
-    Object.entries(current).forEach(([key, value]) => {
-      if (curMerged[key] !== undefined) {
-        curMerged[key] += value;
-      } else {
-        curMerged[key] = value;
-      }
+  const merged = {};
+  objects.forEach((obj) => {
+    Object.entries(obj).forEach(([key, value]) => {
+      merged[key] = (merged[key] ?? 0) + value;
     });
-    return curMerged;
-  }, {});
-
-  return mergedObject;
+  });
+  return merged;
 }
 
 /**
@@ -63,9 +57,11 @@ function mergeObjects(objects) {
  *
  */
 function removeProperties(obj, keys) {
-  const object = obj;
-  keys.forEach((key) => delete object[key]);
-  return object;
+  const result = { ...obj };
+  keys.forEach((key) => {
+    delete result[key];
+  });
+  return result;
 }
 
 /**
@@ -84,11 +80,10 @@ function compareObjects(obj1, obj2) {
   const keys1 = Object.keys(obj1);
   const keys2 = Object.keys(obj2);
 
-  if (keys1.length !== keys2.length) {
-    return false;
-  }
-
-  return keys1.every((key) => obj1[key] === obj2[key]);
+  return (
+    keys1.length === keys2.length &&
+    keys1.every((key) => Object.hasOwn(obj2, key) && obj1[key] === obj2[key])
+  );
 }
 
 /**
@@ -137,13 +132,13 @@ function makeImmutable(obj) {
  *    makeWord({ H:[0], e: [1], l: [2, 3, 8], o: [4, 6], W:[5], r:[7], d:[9]}) => 'HelloWorld'
  */
 function makeWord(lettersObject) {
-  const lettersArr = [];
-  Object.entries(lettersObject).forEach(([key, indexes]) => {
-    indexes.forEach((i) => {
-      lettersArr[i] = key;
+  const letters = [];
+  Object.entries(lettersObject).forEach(([letter, positions]) => {
+    positions.forEach((position) => {
+      letters[position] = letter;
     });
   });
-  return lettersArr.join('');
+  return letters.join('');
 }
 
 /**
@@ -161,37 +156,23 @@ function makeWord(lettersObject) {
  *    sellTickets([25, 100]) => false (The seller does not have enough money to give change.)
  */
 function sellTickets(queue) {
-  const sellerMoney = {
-    25: 0,
-    50: 0,
-    100: 0,
-  };
+  let bills25 = 0;
+  let bills50 = 0;
 
-  for (let i = 0; i < queue.length; i += 1) {
-    const bill = queue[i];
+  return queue.every((bill) => {
     if (bill === 25) {
-      sellerMoney[25] += 1;
+      bills25 += 1;
     } else if (bill === 50) {
-      sellerMoney[50] += 1;
-      if (sellerMoney[25] > 0) {
-        sellerMoney[25] -= 1;
-      } else {
-        return false;
-      }
+      bills50 += 1;
+      bills25 -= 1;
+    } else if (bills50 > 0) {
+      bills50 -= 1;
+      bills25 -= 1;
     } else {
-      sellerMoney[100] += 1;
-      if (sellerMoney[50] > 0 && sellerMoney[25] > 0) {
-        sellerMoney[50] -= 1;
-        sellerMoney[25] -= 1;
-      } else if (sellerMoney[25] >= 3) {
-        sellerMoney[25] -= 3;
-      } else {
-        return false;
-      }
+      bills25 -= 3;
     }
-  }
-
-  return true;
+    return bills25 >= 0;
+  });
 }
 
 /**
@@ -208,14 +189,13 @@ function sellTickets(queue) {
  *    console.log(r.getArea());   // => 200
  */
 function Rectangle(width, height) {
-  return {
-    width,
-    height,
-    getArea() {
-      return width * height;
-    },
-  };
+  this.width = width;
+  this.height = height;
 }
+
+Rectangle.prototype.getArea = function getArea() {
+  return this.width * this.height;
+};
 
 /**
  * Returns the JSON representation of specified object
@@ -243,8 +223,7 @@ function getJSON(obj) {
  *
  */
 function fromJSON(proto, json) {
-  const obj = JSON.parse(json);
-  return Object.setPrototypeOf(obj, proto);
+  return Object.assign(Object.create(proto), JSON.parse(json));
 }
 
 /**
@@ -279,29 +258,9 @@ function fromJSON(proto, json) {
  *    ]
  */
 function sortCitiesArray(arr) {
-  const compare = (a, b) => {
-    const countryA = a.country.toUpperCase();
-    const countryB = b.country.toUpperCase();
-    if (countryA < countryB) {
-      return -1;
-    }
-    if (countryA > countryB) {
-      return 1;
-    }
-
-    const cityA = a.city.toUpperCase();
-    const cityB = b.city.toUpperCase();
-    if (cityA < cityB) {
-      return -1;
-    }
-    if (cityA > cityB) {
-      return 1;
-    }
-
-    return 0;
-  };
-
-  return arr.toSorted(compare);
+  return arr.toSorted(
+    (a, b) => a.country.localeCompare(b.country) || a.city.localeCompare(b.city)
+  );
 }
 
 /**
@@ -340,14 +299,10 @@ function sortCitiesArray(arr) {
  *   }
  */
 function group(array, keySelector, valueSelector) {
-  const groupped = Object.groupBy(array, keySelector);
-  const grouppedEntries = Object.entries(groupped);
-  const mappedEntries = grouppedEntries.map(([country, cities]) => {
-    const citiesArr = cities.map(valueSelector);
-    return [country, citiesArr];
-  });
-
-  return new Map(mappedEntries);
+  const groups = Map.groupBy(array, keySelector);
+  return new Map(
+    Array.from(groups, ([key, items]) => [key, items.map(valueSelector)])
+  );
 }
 
 /**
@@ -404,58 +359,63 @@ function group(array, keySelector, valueSelector) {
  *  For more examples see unit tests.
  */
 
-class Selector {
-  constructor(selector = '') {
-    this.selector = selector;
-    this.lastPart = 0;
-    this.uniqueParts = new Set();
-  }
+const SELECTOR_PARTS = {
+  element: { order: 1, unique: true, format: (value) => value },
+  id: { order: 2, unique: true, format: (value) => `#${value}` },
+  class: { order: 3, unique: false, format: (value) => `.${value}` },
+  attr: { order: 4, unique: false, format: (value) => `[${value}]` },
+  pseudoClass: { order: 5, unique: false, format: (value) => `:${value}` },
+  pseudoElement: { order: 6, unique: true, format: (value) => `::${value}` },
+};
 
-  append(value, part, unique = false) {
-    if (unique && this.uniqueParts.has(part)) {
+class Selector {
+  #value = '';
+
+  #lastOrder = 0;
+
+  #append({ order, unique, format }, value) {
+    // Parts only ever go forward, so a repeated unique part is always the last one added.
+    if (unique && order === this.#lastOrder) {
       throw new Error(
         'Element, id and pseudo-element should not occur more than one time inside the selector'
       );
     }
-    if (part < this.lastPart) {
+    if (order < this.#lastOrder) {
       throw new Error(
         'Selector parts should be arranged in the following order: element, id, class, attribute, pseudo-class, pseudo-element'
       );
     }
-    if (unique) {
-      this.uniqueParts.add(part);
-    }
-    this.lastPart = part;
-    this.selector += value;
+    this.#lastOrder = order;
+    this.#value += format(value);
     return this;
   }
 
   element(value) {
-    return this.append(value, 1, true);
+    return this.#append(SELECTOR_PARTS.element, value);
   }
 
   id(value) {
-    return this.append(`#${value}`, 2, true);
+    return this.#append(SELECTOR_PARTS.id, value);
   }
 
   class(value) {
-    return this.append(`.${value}`, 3);
+    return this.#append(SELECTOR_PARTS.class, value);
   }
 
   attr(value) {
-    return this.append(`[${value}]`, 4);
+    return this.#append(SELECTOR_PARTS.attr, value);
   }
 
   pseudoClass(value) {
-    return this.append(`:${value}`, 5);
+    return this.#append(SELECTOR_PARTS.pseudoClass, value);
   }
 
   pseudoElement(value) {
-    return this.append(`::${value}`, 6, true);
+    return this.#append(SELECTOR_PARTS.pseudoElement, value);
   }
 
   stringify() {
-    return this.selector;
+    return this.#value;
   }
 }
 
@@ -485,9 +445,10 @@ const cssSelectorBuilder = {
   },
 
   combine(selector1, combinator, selector2) {
-    return new Selector(
-      `${selector1.stringify()} ${combinator} ${selector2.stringify()}`
-    );
+    return {
+      stringify: () =>
+        `${selector1.stringify()} ${combinator} ${selector2.stringify()}`,
+    };
   },
 };
 
